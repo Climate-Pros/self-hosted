@@ -1,0 +1,702 @@
+import boto3
+client = boto3.client('ecs',region_name='us-east-1')
+
+
+
+response = client.register_task_definition(
+    family='on_premices-sentry-def',
+    networkMode='bridge',
+    containerDefinitions=[
+        {
+            'name': 'cron',
+            'image': '**************.dkr.ecr.us-east-1.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 256,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached"
+            ],
+            'essential': True,
+            'command': [
+                "run",
+                "cron"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "******************************************"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/sentry/files",
+                    "sourceVolume": "sentry-data"
+                }
+            ],
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_web"
+                }
+            },
+        },
+        {
+            'name': 'dbMigration',
+            'image': '**************.dkr.ecr.us-east-1.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 1024,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached"
+            ],
+            'essential': False,
+            'command': [
+                "bash",
+                "-c",
+                "sentry upgrade --noinput && sentry createuser --email *****.*****@gamil.com --password ******* --superuser"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "******************************************"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_dbmigration"
+                }
+            },
+        },
+        {
+            'name': 'memcached',
+            'image': 'memcached:1.5-alpine',
+            'cpu': 0,
+            'memoryReservation': 256,
+            'essential': True,
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_memcached"
+                }
+            },
+        },
+        {
+            'name': 'postgres',
+            'image': 'postgres:9.5',
+            'cpu': 0,
+            'memoryReservation': 512,
+            'essential': True,
+            'environment': [
+                {
+                    "name": "POSTGRES_USER",
+                    "value": "sentry"
+                },
+                {
+                    "name": "POSTGRES_PASSWORD",
+                    "value": "secret"
+                }
+            ],
+            'privileged': True,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_postgress"
+                }
+            },
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/postgresql/data",
+                    "sourceVolume": "sentry-postgres"
+                }
+            ]
+        },
+        {
+            'name': 'redis',
+            'image': 'redis:3.2-alpine',
+            'cpu': 0,
+            'memoryReservation': 256,
+            'essential': True,
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_redis"
+                }
+            },
+        },
+        {
+            'name': 'web',
+            'image': '**************.dkr.ecr.us-east-1.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 512,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached",
+                "dbMigration"
+            ],
+            "portMappings": [
+                {
+                    "hostPort": 9000,
+                    "protocol": "tcp",
+                    "containerPort": 9000
+                }
+            ],
+            'essential': True,
+            'command': [
+                "run",
+                "web"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "******************************************"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'privileged': True,
+            'dependsOn': [
+                {
+                    'containerName': 'redis',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'dbMigration',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'redis',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'postgres',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'memcached',
+                    'condition': 'START'
+                }
+            ],
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/sentry/files",
+                    "sourceVolume": "sentry-data"
+                }
+            ],
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_web"
+                }
+            },
+        },
+        {
+            'name': 'worker',
+            'image': '**************.dkr.ecr.us-east-1.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 512,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached",
+                "dbMigration"
+            ],
+            'essential': True,
+            'command': [
+                "run",
+                "web"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "******************************************"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'privileged': True,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/sentry/files",
+                    "sourceVolume": "sentry-data"
+                }
+            ],
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "sentry_web"
+                }
+            },
+        },
+
+    ],
+    volumes=[
+        {
+            "name": "sentry-data",import boto3
+client = boto3.client('ecs',region_name='us-west-2')
+
+response = client.register_task_definition(
+    family='on_premices-sentry-def',
+    networkMode='bridge',
+    containerDefinitions=[
+        {
+            'name': 'cron',
+            'image': '311248156803.dkr.ecr.us-west-2.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 256,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached"
+            ],
+            'essential': True,
+            'command': [
+                "run",
+                "cron"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "mmrXElVahZ0nhvvsjNaqkUNo8h1w2dmuzGXZoJi0ISDMHRgI2N"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/sentry/files",
+                    "sourceVolume": "sentry-data"
+                }
+            ],
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_web"
+                }
+            },
+        },
+        {
+            'name': 'dbMigration',
+            'image': '311248156803.dkr.ecr.us-west-2.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 1024,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached"
+            ],
+            'essential': False,
+            'command': [
+                "bash",
+                "-c",
+                "sentry upgrade --noinput && sentry createuser --email *****.*****@gamil.com --password ******* --superuser"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "mmrXElVahZ0nhvvsjNaqkUNo8h1w2dmuzGXZoJi0ISDMHRgI2N"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_dbmigration"
+                }
+            },
+        },
+        {
+            'name': 'memcached',
+            'image': 'memcached:1.5-alpine',
+            'cpu': 0,
+            'memoryReservation': 256,
+            'essential': True,
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_memcached"
+                }
+            },
+        },
+        {
+            'name': 'postgres',
+            'image': 'postgres:9.5',
+            'cpu': 0,
+            'memoryReservation': 512,
+            'essential': True,
+            'environment': [
+                {
+                    "name": "POSTGRES_USER",
+                    "value": "sentry"
+                },
+                {
+                    "name": "POSTGRES_PASSWORD",
+                    "value": "secret"
+                }
+            ],
+            'privileged': True,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_postgress"
+                }
+            },
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/postgresql/data",
+                    "sourceVolume": "sentry-postgres"
+                }
+            ]
+        },
+        {
+            'name': 'redis',
+            'image': 'redis:3.2-alpine',
+            'cpu': 0,
+            'memoryReservation': 256,
+            'essential': True,
+            'privileged': False,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_redis"
+                }
+            },
+        },
+        {
+            'name': 'web',
+            'image': '311248156803.dkr.ecr.us-west-2.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 512,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached",
+                "dbMigration"
+            ],
+            "portMappings": [
+                {
+                    "hostPort": 9000,
+                    "protocol": "tcp",
+                    "containerPort": 9000
+                }
+            ],
+            'essential': True,
+            'command': [
+                "run",
+                "web"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "mmrXElVahZ0nhvvsjNaqkUNo8h1w2dmuzGXZoJi0ISDMHRgI2N"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'privileged': True,
+            'dependsOn': [
+                {
+                    'containerName': 'redis',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'dbMigration',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'redis',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'postgres',
+                    'condition': 'START'
+                },
+                {
+                    'containerName': 'memcached',
+                    'condition': 'START'
+                }
+            ],
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/sentry/files",
+                    "sourceVolume": "sentry-data"
+                }
+            ],
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_web"
+                }
+            },
+        },
+        {
+            'name': 'worker',
+            'image': '311248156803.dkr.ecr.us-west-2.amazonaws.com/on_premices-sentry',
+            'cpu': 0,
+            'memoryReservation': 512,
+            'links': [
+                "redis",
+                "postgres",
+                "memcached",
+                "dbMigration"
+            ],
+            'essential': True,
+            'command': [
+                "run",
+                "web"
+            ],
+            'environment': [
+                {
+                    "name": "SENTRY_POSTGRES_HOST",
+                    "value": "postgres"
+                },
+                {
+                    "name": "SENTRY_MEMCACHED_HOST",
+                    "value": "memcached"
+                },
+                {
+                    "name": "SENTRY_EMAIL_HOST",
+                    "value": "smtp"
+                },
+                {
+                    "name": "SENTRY_SECRET_KEY",
+                    "value": "mmrXElVahZ0nhvvsjNaqkUNo8h1w2dmuzGXZoJi0ISDMHRgI2N"
+                },
+                {
+                    "name": "SENTRY_REDIS_HOST",
+                    "value": "redis"
+                }
+            ],
+            'privileged': True,
+            'readonlyRootFilesystem': False,
+            'pseudoTerminal': False,
+            'mountPoints': [
+                {
+                    "containerPath": "/var/lib/sentry/files",
+                    "sourceVolume": "sentry-data"
+                }
+            ],
+            'logConfiguration': {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "on_premices-sentry",
+                    "awslogs-region": "us-west-2",
+                    "awslogs-stream-prefix": "sentry_web"
+                }
+            },
+        },
+
+    ],
+    volumes=[
+        {
+            "name": "sentry-data",
+            "host": {
+                "sourcePath": "/var/lib/sentry/files"
+            },
+        },
+        {
+            "name": "sentry-postgres",
+            "host": {
+                "sourcePath": "/var/lib/postgresql/data"
+            },
+        }
+    ],
+    requiresCompatibilities=['EC2'],
+    tags=[
+        {
+            'key': 'name',
+            'value': 'sentry-deployment'
+        }
+    ]
+)
+
+print(response)
+
+            "host": {
+                "sourcePath": "/var/lib/sentry/files"
+            },
+        },
+        {
+            "name": "sentry-postgres",
+            "host": {
+                "sourcePath": "/var/lib/postgresql/data"
+            },
+        }
+    ],
+    requiresCompatibilities=['EC2'],
+    tags=[
+        {
+            'key': 'name',
+            'value': 'sentry-deployment'
+        }
+    ]
+)
+
+print(response)
+@ryanhelms
+ 
